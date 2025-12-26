@@ -16,6 +16,7 @@ import { RealtimeModule } from "./modules/realtime";
 import { RolesModule } from "./modules/roles";
 import { UsersModule } from "./modules/users";
 import { MigrationsModule } from "./modules/migrations";
+import { ServerModule } from "./modules/server";
 import type { AuthMode, BaasixConfig, BaseItem } from "./types";
 
 /**
@@ -89,6 +90,7 @@ export class Baasix {
   public readonly roles: RolesModule;
   public readonly users: UsersModule;
   public readonly migrations: MigrationsModule;
+  public readonly server: ServerModule;
 
   // Items module factory cache
   private itemsModules: Map<string, ItemsModule<BaseItem>> = new Map();
@@ -156,6 +158,7 @@ export class Baasix {
     this.roles = new RolesModule({ client: this.httpClient });
     this.users = new UsersModule({ client: this.httpClient });
     this.migrations = new MigrationsModule({ client: this.httpClient });
+    this.server = new ServerModule({ client: this.httpClient });
     
     // Realtime module needs storage for auth token
     this.realtime = new RealtimeModule({
@@ -293,6 +296,25 @@ export class Baasix {
   async clearTenant(): Promise<void> {
     this.httpClient.updateConfig({ tenantId: undefined });
     await this.storage.remove(STORAGE_KEYS.TENANT);
+  }
+
+  /**
+   * Set a static token (convenience method that delegates to auth.setToken)
+   *
+   * @example
+   * ```typescript
+   * baasix.setToken('your-api-token');
+   * ```
+   */
+  async setToken(token: string): Promise<void> {
+    return this.auth.setToken(token);
+  }
+
+  /**
+   * Get the current auth token
+   */
+  async getToken(): Promise<string | null> {
+    return this.storage.get(STORAGE_KEYS.ACCESS_TOKEN);
   }
 
   /**

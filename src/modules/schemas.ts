@@ -53,10 +53,19 @@ export class SchemasModule {
    * ```typescript
    * const { data } = await baasix.schemas.find();
    * console.log(data.map(s => s.collectionName));
+   * 
+   * // With pagination
+   * const { data } = await baasix.schemas.find({ page: 1, limit: 50 });
    * ```
    */
-  async find(): Promise<PaginatedResponse<SchemaInfo>> {
-    return this.client.get<PaginatedResponse<SchemaInfo>>("/schemas");
+  async find(params?: {
+    page?: number;
+    limit?: number;
+    sort?: string;
+    search?: string;
+    filter?: Record<string, unknown>;
+  }): Promise<PaginatedResponse<SchemaInfo>> {
+    return this.client.get<PaginatedResponse<SchemaInfo>>("/schemas", { params });
   }
 
   /**
@@ -215,6 +224,28 @@ export class SchemasModule {
   ): Promise<void> {
     await this.client.delete(
       `/schemas/${collection}/relationships/${relationshipName}`
+    );
+  }
+
+  /**
+   * Update a relationship
+   *
+   * @example
+   * ```typescript
+   * await baasix.schemas.updateRelationship('posts', 'author', {
+   *   alias: 'authoredPosts',
+   *   onDelete: 'CASCADE'
+   * });
+   * ```
+   */
+  async updateRelationship(
+    collection: string,
+    relationshipName: string,
+    data: Partial<RelationshipDefinition>
+  ): Promise<void> {
+    await this.client.patch(
+      `/schemas/${collection}/relationships/${relationshipName}`,
+      data
     );
   }
 
