@@ -18,7 +18,7 @@ export interface NotificationsModuleConfig {
  * const { data } = await baasix.notifications.find();
  *
  * // Mark as seen
- * await baasix.notifications.markAsSeen('notification-id');
+ * await baasix.notifications.markAsSeen(['notification-id']);
  *
  * // Send notification (admin)
  * await baasix.notifications.send({
@@ -49,57 +49,11 @@ export class NotificationsModule {
   async find(params?: {
     limit?: number;
     page?: number;
-    seen?: boolean;
+    filter?: Record<string, unknown>;
   }): Promise<PaginatedResponse<Notification>> {
     return this.client.get<PaginatedResponse<Notification>>("/notifications", {
       params: params as Record<string, unknown>,
     });
-  }
-
-  /**
-   * Get a single notification by ID
-   */
-  async findOne(id: string): Promise<Notification> {
-    const response = await this.client.get<{ data: Notification }>(
-      `/notifications/${id}`
-    );
-    return response.data;
-  }
-
-  /**
-   * Mark a notification as seen
-   *
-   * @example
-   * ```typescript
-   * await baasix.notifications.markAsSeen('notification-uuid');
-   * ```
-   */
-  async markAsSeen(id: string): Promise<void> {
-    await this.client.patch(`/notifications/${id}/seen`, { seen: true });
-  }
-
-  /**
-   * Mark multiple notifications as seen
-   *
-   * @example
-   * ```typescript
-   * await baasix.notifications.markManySeen(['id1', 'id2', 'id3']);
-   * ```
-   */
-  async markManySeen(ids: string[]): Promise<void> {
-    await Promise.all(ids.map((id) => this.markAsSeen(id)));
-  }
-
-  /**
-   * Mark all notifications as seen
-   *
-   * @example
-   * ```typescript
-   * await baasix.notifications.markAllSeen();
-   * ```
-   */
-  async markAllSeen(): Promise<void> {
-    await this.client.post("/notifications/seen-all");
   }
 
   /**
@@ -111,22 +65,50 @@ export class NotificationsModule {
    * ```
    */
   async getUnreadCount(): Promise<number> {
-    const response = await this.client.get<{ data: { count: number } }>(
-      "/notifications/unread-count"
+    const response = await this.client.get<{ count: number }>(
+      "/notifications/unread/count"
     );
-    return response.data.count;
+    return response.count;
   }
 
   /**
-   * Delete a notification
+   * Mark notifications as seen
    *
    * @example
    * ```typescript
-   * await baasix.notifications.delete('notification-uuid');
+   * // Mark specific notifications as seen
+   * await baasix.notifications.markAsSeen(['id1', 'id2']);
+   * 
+   * // Mark all notifications as seen
+   * await baasix.notifications.markAsSeen();
    * ```
    */
-  async delete(id: string): Promise<void> {
-    await this.client.delete(`/notifications/${id}`);
+  async markAsSeen(notificationIds?: string[]): Promise<{ count: number }> {
+    const response = await this.client.post<{ message: string; count: number }>(
+      "/notifications/mark-seen",
+      { notificationIds }
+    );
+    return { count: response.count };
+  }
+
+  /**
+   * Delete notifications for the current user
+   *
+   * @example
+   * ```typescript
+   * // Delete specific notifications
+   * await baasix.notifications.delete(['id1', 'id2']);
+   * 
+   * // Delete all notifications
+   * await baasix.notifications.delete();
+   * ```
+   */
+  async delete(notificationIds?: string[]): Promise<{ count: number }> {
+    const response = await this.client.delete<{ message: string; count: number }>(
+      "/notifications",
+      { params: notificationIds ? { notificationIds } : undefined }
+    );
+    return { count: response.count };
   }
 
   /**
@@ -143,8 +125,32 @@ export class NotificationsModule {
    * });
    * ```
    */
-  async send(data: SendNotificationData): Promise<void> {
-    await this.client.post("/notifications/send", data);
+  async send(data: SendNotificationData): Promise<{ notificationIds: string[] }> {
+    const response = await this.client.post<{ message: string; notificationIds: string[] }>(
+      "/notifications/send",
+      data
+    );
+    return { notificationIds: response.notificationIds };
+  }
+
+  /**
+   * Cleanup old notifications (requires admin permissions)
+   *
+   * @example
+   * ```typescript
+   * // Clean up notifications older than 30 days (default)
+   * await baasix.notifications.cleanup();
+   * 
+   * // Clean up notifications older than 7 days
+   * await baasix.notifications.cleanup(7);
+   * ```
+   */
+  async cleanup(days: number = 30): Promise<{ count: number }> {
+    const response = await this.client.post<{ message: string; count: number }>(
+      "/notifications/cleanup",
+      { days }
+    );
+    return { count: response.count };
   }
 }
 

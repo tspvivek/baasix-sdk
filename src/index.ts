@@ -393,8 +393,10 @@ export type {
   MigrationStatus, 
   Migration, 
   PendingMigration, 
-  MigrationResult, 
-  RollbackResult 
+  MigrationRunOptions,
+  MigrationRunResult, 
+  RollbackResult,
+  CreateMigrationOptions 
 } from "./modules/migrations";
 
 // Type exports

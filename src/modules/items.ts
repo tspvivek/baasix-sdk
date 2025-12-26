@@ -617,50 +617,28 @@ export class ItemsModule<T extends BaseItem = BaseItem> {
    * const fileInput = document.querySelector('input[type="file"]');
    * const file = fileInput.files[0];
    * 
-   * const result = await baasix.items('products').importCSV(file, {
-   *   delimiter: ',',
-   *   skipFirstRow: true
-   * });
+   * const result = await baasix.items('products').importCSV(file);
    * 
-   * console.log(`Imported ${result.created} items`);
+   * console.log(`Imported ${result.imported} items`);
    * ```
    */
   async importCSV(
-    file: File | { uri: string; name: string; type: string },
-    options?: {
-      delimiter?: string;
-      skipFirstRow?: boolean;
-      dateFormat?: string;
-      fieldMapping?: Record<string, string>;
-    }
+    file: File | { uri: string; name: string; type: string }
   ): Promise<ImportResult> {
     const formData = new FormData();
     
     if (file instanceof File) {
-      formData.append("file", file);
+      formData.append("csvFile", file);
     } else {
       // React Native style file
-      formData.append("file", file as any);
+      formData.append("csvFile", file as any);
     }
 
-    if (options?.delimiter) {
-      formData.append("delimiter", options.delimiter);
-    }
-    if (options?.skipFirstRow !== undefined) {
-      formData.append("skipFirstRow", String(options.skipFirstRow));
-    }
-    if (options?.dateFormat) {
-      formData.append("dateFormat", options.dateFormat);
-    }
-    if (options?.fieldMapping) {
-      formData.append("fieldMapping", JSON.stringify(options.fieldMapping));
-    }
-
-    const response = await this.client.post<{ data: ImportResult }>(
-      `/items/${this.collection}/import/csv`,
+    const response = await this.client.post<{ results: ImportResult }>(
+      `/items/${this.collection}/import-csv`,
       formData
     );
-    return response.data;
+    return response.results;
   }
 
   /**
@@ -671,32 +649,25 @@ export class ItemsModule<T extends BaseItem = BaseItem> {
    * const file = fileInput.files[0]; // JSON file
    * const result = await baasix.items('products').importJSON(file);
    * 
-   * console.log(`Imported ${result.created} items`);
+   * console.log(`Imported ${result.imported} items`);
    * ```
    */
   async importJSON(
-    file: File | { uri: string; name: string; type: string },
-    options?: {
-      fieldMapping?: Record<string, string>;
-    }
+    file: File | { uri: string; name: string; type: string }
   ): Promise<ImportResult> {
     const formData = new FormData();
     
     if (file instanceof File) {
-      formData.append("file", file);
+      formData.append("jsonFile", file);
     } else {
-      formData.append("file", file as any);
+      formData.append("jsonFile", file as any);
     }
 
-    if (options?.fieldMapping) {
-      formData.append("fieldMapping", JSON.stringify(options.fieldMapping));
-    }
-
-    const response = await this.client.post<{ data: ImportResult }>(
-      `/items/${this.collection}/import/json`,
+    const response = await this.client.post<{ results: ImportResult }>(
+      `/items/${this.collection}/import-json`,
       formData
     );
-    return response.data;
+    return response.results;
   }
 
   /**
@@ -725,19 +696,26 @@ export class ItemsModule<T extends BaseItem = BaseItem> {
   // ===================
 
   /**
-   * Sort/reorder items (move item before another)
+   * Sort/reorder items (move item before or after another)
    *
    * @example
    * ```typescript
    * // Move item1 before item2
    * await baasix.items('products').sortItem('item1-uuid', 'item2-uuid');
+   * 
+   * // Move item1 after item2
+   * await baasix.items('products').sortItem('item1-uuid', 'item2-uuid', 'after');
    * ```
    */
-  async sortItem(itemId: string, beforeItemId: string): Promise<void> {
-    await this.client.post("/utils/sort", {
-      collection: this.collection,
+  async sortItem(
+    itemId: string,
+    targetItemId: string,
+    mode: "before" | "after" = "before"
+  ): Promise<void> {
+    await this.client.post(`/utils/sort/${this.collection}`, {
       item: itemId,
-      to: beforeItemId,
+      to: targetItemId,
+      mode,
     });
   }
 
@@ -757,20 +735,19 @@ export class ItemsModule<T extends BaseItem = BaseItem> {
   async reorder(orderedIds: string[]): Promise<void> {
     // Sort items one by one to achieve the desired order
     for (let i = 1; i < orderedIds.length; i++) {
-      await this.client.post("/utils/sort", {
-        collection: this.collection,
+      await this.client.post(`/utils/sort/${this.collection}`, {
         item: orderedIds[i],
         to: orderedIds[i - 1],
+        mode: "after",
       });
     }
   }
 }
 
 export interface ImportResult {
-  created: number;
-  updated: number;
-  skipped: number;
-  errors: Array<{ row: number; error: string }>;
+  imported: number;
+  failed: number;
+  errors: Array<{ row: number; data: Record<string, unknown>; error: string }>;
 }
 
 // Re-export types from types.ts

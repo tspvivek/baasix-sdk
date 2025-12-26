@@ -14,26 +14,65 @@ export interface MigrationStatus {
 
 export interface Migration {
   id: string;
+  version: string;
   name: string;
+  type: string;
+  status: string;
   batch: number;
   migratedAt: string;
+  executionTime?: number;
 }
 
 export interface PendingMigration {
+  version: string;
   name: string;
+  type: string;
   path?: string;
 }
 
-export interface MigrationResult {
-  success: boolean;
-  migrationsRun: string[];
-  errors?: string[];
+export interface MigrationRunOptions {
+  /** Run only a specific migration version */
+  version?: string;
+  /** Run migrations up to and including this version */
+  toVersion?: string;
+  /** Number of migrations to run */
+  step?: number;
+  /** Preview without executing */
+  dryRun?: boolean;
+}
+
+export interface MigrationRunResult {
+  results: Array<{
+    version: string;
+    name: string;
+    status: "completed" | "failed";
+    error?: string;
+  }>;
+  summary: {
+    total: number;
+    completed: number;
+    failed: number;
+  };
 }
 
 export interface RollbackResult {
-  success: boolean;
-  migrationsRolledBack: string[];
-  errors?: string[];
+  results: Array<{
+    version: string;
+    name: string;
+    status: string;
+  }>;
+  summary: {
+    total: number;
+  };
+}
+
+export interface CreateMigrationOptions {
+  /** Migration type (system, schema, data, custom) */
+  type?: "system" | "schema" | "data" | "custom";
+  /** Migration description */
+  description?: string;
+  /** Custom version (auto-generated if not provided) */
+  version?: string;
 }
 
 /**
@@ -75,15 +114,24 @@ export class MigrationsModule {
   }
 
   /**
-   * Get all completed migrations
+   * Get all migrations with optional filtering
    * 
    * @example
    * ```typescript
+   * // Get all migrations
    * const migrations = await baasix.migrations.list();
+   * 
+   * // Get completed migrations
+   * const completed = await baasix.migrations.list({ status: 'completed' });
    * ```
    */
-  async list(): Promise<Migration[]> {
-    const response = await this.client.get<{ data: Migration[] }>("/migrations");
+  async list(options?: {
+    status?: "pending" | "completed" | "failed";
+    type?: "system" | "schema" | "data" | "custom";
+  }): Promise<Migration[]> {
+    const response = await this.client.get<{ data: Migration[] }>("/migrations", {
+      params: options,
+    });
     return response.data;
   }
 
@@ -103,32 +151,35 @@ export class MigrationsModule {
   }
 
   /**
-   * Check if there are pending migrations
+   * Check if migrations are needed
    * 
    * @example
    * ```typescript
-   * const needsMigration = await baasix.migrations.hasPending();
+   * const check = await baasix.migrations.check();
+   * if (check.hasPending) {
+   *   console.log('Migrations needed');
+   * }
    * ```
    */
-  async hasPending(): Promise<boolean> {
-    const response = await this.client.get<{ data: { hasPending: boolean } }>(
+  async check(): Promise<{ hasPending: boolean; pendingCount: number }> {
+    const response = await this.client.get<{ data: { hasPending: boolean; pendingCount: number } }>(
       "/migrations/check"
     );
-    return response.data.hasPending;
+    return response.data;
   }
 
   /**
-   * Get a specific migration by name
+   * Get a specific migration by version
    * 
    * @example
    * ```typescript
-   * const migration = await baasix.migrations.get('20231201_create_users');
+   * const migration = await baasix.migrations.get('20231201000000');
    * ```
    */
-  async get(name: string): Promise<Migration | null> {
+  async get(version: string): Promise<Migration | null> {
     try {
       const response = await this.client.get<{ data: Migration }>(
-        `/migrations/${encodeURIComponent(name)}`
+        `/migrations/${encodeURIComponent(version)}`
       );
       return response.data;
     } catch {
@@ -141,14 +192,20 @@ export class MigrationsModule {
    * 
    * @example
    * ```typescript
+   * // Run all pending migrations
    * const result = await baasix.migrations.run();
-   * console.log(`Ran ${result.migrationsRun.length} migrations`);
+   * 
+   * // Run with options
+   * const result = await baasix.migrations.run({
+   *   step: 1,  // Run only 1 migration
+   *   dryRun: true  // Preview without executing
+   * });
    * ```
    */
-  async run(): Promise<MigrationResult> {
-    const response = await this.client.post<{ data: MigrationResult }>(
+  async run(options?: MigrationRunOptions): Promise<MigrationRunResult> {
+    const response = await this.client.post<{ data: MigrationRunResult }>(
       "/migrations/run",
-      {}
+      options || {}
     );
     return response.data;
   }
@@ -158,13 +215,13 @@ export class MigrationsModule {
    * 
    * @example
    * ```typescript
-   * const result = await baasix.migrations.rollback('20231201_create_users');
+   * const result = await baasix.migrations.rollback('20231201000000');
    * ```
    */
-  async rollback(name: string): Promise<RollbackResult> {
+  async rollback(version: string): Promise<RollbackResult> {
     const response = await this.client.post<{ data: RollbackResult }>(
-      "/migrations/rollback",
-      { name }
+      `/migrations/rollback/${encodeURIComponent(version)}`,
+      {}
     );
     return response.data;
   }
@@ -174,12 +231,12 @@ export class MigrationsModule {
    * 
    * @example
    * ```typescript
-   * const result = await baasix.migrations.rollbackLast();
+   * const result = await baasix.migrations.rollbackBatch();
    * ```
    */
-  async rollbackLast(): Promise<RollbackResult> {
+  async rollbackBatch(): Promise<RollbackResult> {
     const response = await this.client.post<{ data: RollbackResult }>(
-      "/migrations/rollback-last",
+      "/migrations/rollback-batch",
       {}
     );
     return response.data;
@@ -190,38 +247,61 @@ export class MigrationsModule {
    * 
    * @example
    * ```typescript
-   * const migrationName = await baasix.migrations.create('add_status_column');
+   * const { filepath } = await baasix.migrations.create('add_status_column', {
+   *   type: 'schema',
+   *   description: 'Add status column to orders'
+   * });
    * ```
    */
-  async create(name: string): Promise<string> {
-    const response = await this.client.post<{ data: { name: string } }>(
+  async create(
+    name: string,
+    options?: CreateMigrationOptions
+  ): Promise<{ filepath: string }> {
+    const response = await this.client.post<{ data: { filepath: string } }>(
       "/migrations/create",
-      { name }
+      { name, ...options }
     );
-    return response.data.name;
+    return response.data;
   }
 
   /**
-   * Mark a migration as complete (without running it)
+   * Mark a specific migration as completed without running it
+   * Useful for existing installations that already have the changes
    * 
    * @example
    * ```typescript
-   * await baasix.migrations.markComplete('20231201_create_users');
+   * await baasix.migrations.markCompleted('20231201000000');
    * ```
    */
-  async markComplete(name: string): Promise<void> {
-    await this.client.post("/migrations/mark-complete", { name });
+  async markCompleted(
+    version: string,
+    metadata?: Record<string, unknown>
+  ): Promise<Migration> {
+    const response = await this.client.post<{ data: Migration }>(
+      `/migrations/mark-completed/${encodeURIComponent(version)}`,
+      { metadata }
+    );
+    return response.data;
   }
 
   /**
-   * Mark all pending migrations as complete
+   * Mark all pending migrations as completed
+   * Useful for bringing an existing database up to date without running migrations
    * 
    * @example
    * ```typescript
-   * await baasix.migrations.markAllComplete();
+   * // Mark all pending
+   * await baasix.migrations.markAllCompleted();
+   * 
+   * // Mark up to a specific version
+   * await baasix.migrations.markAllCompleted('20231201000000');
    * ```
    */
-  async markAllComplete(): Promise<void> {
-    await this.client.post("/migrations/mark-all-complete", {});
+  async markAllCompleted(toVersion?: string): Promise<MigrationRunResult> {
+    const response = await this.client.post<{ data: MigrationRunResult }>(
+      "/migrations/mark-all-completed",
+      { toVersion }
+    );
+    return response.data;
   }
 }
