@@ -20,6 +20,9 @@ Official JavaScript/TypeScript SDK for [Baasix](https://www.baasix.com) Backend-
 - 🔀 **Workflows** - Execute and monitor workflow executions
 - 👥 **User & Role Management** - Admin operations for users and roles
 - 📊 **Reports** - Generate reports with aggregations
+- 🔔 **Notifications** - User notification system with realtime delivery
+- 🗃️ **Migrations** - Database schema migration management
+- 🔃 **Sort/Reorder** - Drag-and-drop style item reordering
 
 ## Installation
 
@@ -716,19 +719,33 @@ await baasix.roles.update(roleId, { description: 'Updated description' });
 
 ```typescript
 // Import from CSV file
-const result = await baasix.items('products').importCSV(csvFile, {
-  delimiter: ',',
-  skipFirstRow: true,
-});
-console.log(`Created: ${result.created}, Errors: ${result.errors.length}`);
+const result = await baasix.items('products').importCSV(csvFile);
+console.log(`Imported: ${result.imported}, Failed: ${result.failed}`);
 
 // Import from JSON file
 const result = await baasix.items('products').importJSON(jsonFile);
 
-// Import from data array
-const result = await baasix.items('products').importData([
+// Bulk create from data array
+const ids = await baasix.items('products').createMany([
   { name: 'Product 1', price: 29.99 },
   { name: 'Product 2', price: 39.99 },
+]);
+```
+
+## Sort / Reorder Items
+
+```typescript
+// Move item1 before item2
+await baasix.items('products').sortItem('item1-uuid', 'item2-uuid');
+
+// Move item1 after item2
+await baasix.items('products').sortItem('item1-uuid', 'item2-uuid', 'after');
+
+// Reorder multiple items (set explicit order)
+await baasix.items('products').reorder([
+  'item3-uuid',
+  'item1-uuid',
+  'item2-uuid'
 ]);
 ```
 
@@ -739,31 +756,66 @@ const result = await baasix.items('products').importData([
 const status = await baasix.migrations.status();
 console.log(`Pending: ${status.pendingCount}`);
 
+// Get pending migrations
+const pending = await baasix.migrations.pending();
+
 // Run pending migrations
-if (status.hasPending) {
-  const result = await baasix.migrations.run();
-  console.log(`Ran ${result.migrationsRun.length} migrations`);
-}
+const result = await baasix.migrations.run();
+console.log(`Completed: ${result.summary.completed}`);
+
+// Run with options
+const result = await baasix.migrations.run({
+  step: 1,      // Run only 1 migration
+  dryRun: true, // Preview without executing
+});
+
+// Rollback a specific migration
+await baasix.migrations.rollback('20231201000000');
 
 // Rollback last batch
-const rollback = await baasix.migrations.rollbackLast();
+await baasix.migrations.rollbackBatch();
+
+// Create new migration file
+const { filepath } = await baasix.migrations.create('add_status_column', {
+  type: 'schema',
+  description: 'Add status column to orders',
+});
+
+// Mark migrations as completed (without running)
+await baasix.migrations.markCompleted('20231201000000');
+await baasix.migrations.markAllCompleted();
 ```
 
 ## Notifications
 
 ```typescript
-// Get notifications
+// Get user notifications
 const { data } = await baasix.notifications.find({
   limit: 20,
-  seen: false,
+  filter: { seen: { eq: false } },
 });
-
-// Mark as seen
-await baasix.notifications.markAsSeen('notification-uuid');
-await baasix.notifications.markAllSeen();
 
 // Get unread count
 const count = await baasix.notifications.getUnreadCount();
+
+// Mark notifications as seen
+await baasix.notifications.markAsSeen(['id1', 'id2']);
+// Or mark all as seen
+await baasix.notifications.markAsSeen();
+
+// Delete notifications
+await baasix.notifications.delete(['id1', 'id2']);
+
+// Send notification (admin only)
+await baasix.notifications.send({
+  type: 'alert',
+  title: 'System Update',
+  message: 'Maintenance scheduled for tonight',
+  userIds: ['user1-uuid', 'user2-uuid'],
+});
+
+// Cleanup old notifications (admin only)
+await baasix.notifications.cleanup(30); // older than 30 days
 ```
 
 ## Custom Storage Adapter
