@@ -5,7 +5,9 @@ import type {
   RelationshipDefinition,
   SchemaDefinition,
   SchemaInfo,
+  Sort,
 } from "../types";
+import { normalizeSort } from "../utils/sort";
 
 export interface SchemasModuleConfig {
   client: HttpClient;
@@ -61,11 +63,15 @@ export class SchemasModule {
   async find(params?: {
     page?: number;
     limit?: number;
-    sort?: string;
+    sort?: Sort;
     search?: string;
     filter?: Record<string, unknown>;
   }): Promise<PaginatedResponse<SchemaInfo>> {
-    return this.client.get<PaginatedResponse<SchemaInfo>>("/schemas", { params });
+    const normalizedParams = params ? {
+      ...params,
+      sort: normalizeSort(params.sort),
+    } : undefined;
+    return this.client.get<PaginatedResponse<SchemaInfo>>("/schemas", { params: normalizedParams });
   }
 
   /**

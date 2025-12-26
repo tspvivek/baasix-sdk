@@ -6,6 +6,32 @@ export interface ReportsModuleConfig {
 }
 
 /**
+ * Stats query for the stats endpoint
+ */
+export interface StatsQuery {
+  /** Unique name for this stats query */
+  name: string;
+  /** Collection to query */
+  collection: string;
+  /** Query parameters including aggregate, groupBy, filter, fields */
+  query: {
+    aggregate?: Aggregate;
+    groupBy?: string[];
+    filter?: Filter;
+    fields?: string[];
+  };
+}
+
+/**
+ * Stats result from a single query
+ */
+export interface StatsResult {
+  name: string;
+  collection: string;
+  data: Record<string, unknown>[];
+}
+
+/**
  * Reports module for generating analytics and reports.
  *
  * @example
@@ -35,7 +61,7 @@ export class ReportsModule {
   }
 
   /**
-   * Generate a report for a collection
+   * Generate a report for a collection using POST method
    *
    * @example
    * ```typescript
@@ -45,7 +71,7 @@ export class ReportsModule {
    *     revenue: { function: 'sum', field: 'total' },
    *     orders: { function: 'count', field: 'id' }
    *   },
-   *   groupBy: 'month',
+   *   groupBy: ['month'],
    *   dateRange: {
    *     start: '2025-01-01',
    *     end: '2025-12-31'
@@ -65,36 +91,65 @@ export class ReportsModule {
   }
 
   /**
-   * Get collection statistics
+   * Query a report for a collection using GET method with query params
    *
    * @example
    * ```typescript
-   * const stats = await baasix.reports.getStats('products');
-   * console.log(stats.totalCount, stats.recentCount);
+   * const report = await baasix.reports.query('orders', {
+   *   aggregate: {
+   *     total: { function: 'sum', field: 'amount' }
+   *   },
+   *   groupBy: ['status']
+   * });
    * ```
    */
-  async getStats(
+  async query(
     collection: string,
-    options?: {
-      timeframe?: "24h" | "7d" | "30d" | "90d" | "1y";
+    params?: {
+      aggregate?: Aggregate;
+      groupBy?: string[];
+      filter?: Filter;
+      fields?: string[];
     }
-  ): Promise<{
-    totalCount: number;
-    recentCount: number;
-    deletedCount?: number;
-    byDate?: Record<string, number>;
-  }> {
-    const response = await this.client.get<{
-      data: {
-        totalCount: number;
-        recentCount: number;
-        deletedCount?: number;
-        byDate?: Record<string, number>;
-      };
-    }>(`/reports/${collection}/stats`, {
-      params: options as Record<string, unknown>,
+  ): Promise<ReportResult> {
+    const response = await this.client.get<ReportResult>(
+      `/reports/${collection}`,
+      { params: params as Record<string, unknown> }
+    );
+    return response;
+  }
+
+  /**
+   * Get statistics for multiple collections in a single request
+   *
+   * @example
+   * ```typescript
+   * const stats = await baasix.reports.getStats([
+   *   {
+   *     name: 'total_products',
+   *     collection: 'products',
+   *     query: {
+   *       aggregate: { count: { function: 'count', field: '*' } }
+   *     }
+   *   },
+   *   {
+   *     name: 'total_orders',
+   *     collection: 'orders',
+   *     query: {
+   *       aggregate: {
+   *         count: { function: 'count', field: '*' },
+   *         total_amount: { function: 'sum', field: 'amount' }
+   *       }
+   *     }
+   *   }
+   * ]);
+   * ```
+   */
+  async getStats(stats: StatsQuery[]): Promise<StatsResult[]> {
+    const response = await this.client.post<StatsResult[]>(`/reports/stats`, {
+      stats,
     });
-    return response.data;
+    return response;
   }
 
   /**
@@ -188,5 +243,5 @@ export class ReportsModule {
   }
 }
 
-// Re-export types
+// Re-export types from ../types
 export type { Aggregate, Filter, ReportConfig, ReportResult };

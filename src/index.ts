@@ -397,6 +397,7 @@ export { NotificationsModule } from "./modules/notifications";
 export { PermissionsModule } from "./modules/permissions";
 export { SettingsModule } from "./modules/settings";
 export { ReportsModule } from "./modules/reports";
+export type { StatsQuery, StatsResult } from "./modules/reports";
 export { WorkflowsModule } from "./modules/workflows";
 export { RealtimeModule, RealtimeChannel } from "./modules/realtime";
 export type { 

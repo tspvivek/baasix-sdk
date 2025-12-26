@@ -507,25 +507,109 @@ await baasix.schemas.createIndex('products', {
 
 ## Reports & Analytics
 
+### Generate Report (POST)
+
+Use `generate()` to create a report with a POST request, sending the query in the request body:
+
 ```typescript
-// Generate report
 const report = await baasix.reports.generate('orders', {
   aggregate: {
     revenue: { function: 'sum', field: 'total' },
     orders: { function: 'count', field: 'id' },
   },
-  groupBy: 'category',
+  groupBy: ['category'],
   filter: { status: { eq: 'completed' } },
   dateRange: {
     start: '2025-01-01',
     end: '2025-12-31',
   },
 });
+```
 
-// Quick count
+### Query Report (GET)
+
+Use `query()` to fetch a report with a GET request, sending parameters as query strings:
+
+```typescript
+const report = await baasix.reports.query('orders', {
+  aggregate: {
+    total: { function: 'sum', field: 'amount' },
+  },
+  groupBy: ['status'],
+  filter: { createdAt: { gte: '$NOW-DAYS_30' } },
+});
+```
+
+### Multi-Collection Stats
+
+Get statistics for multiple collections in a single request:
+
+```typescript
+const stats = await baasix.reports.getStats([
+  {
+    name: 'total_products',
+    collection: 'products',
+    query: {
+      aggregate: { count: { function: 'count', field: '*' } },
+    },
+  },
+  {
+    name: 'total_orders',
+    collection: 'orders',
+    query: {
+      aggregate: {
+        count: { function: 'count', field: '*' },
+        total_amount: { function: 'sum', field: 'amount' },
+      },
+    },
+  },
+  {
+    name: 'products_by_category',
+    collection: 'products',
+    query: {
+      groupBy: ['categoryId'],
+      aggregate: {
+        count: { function: 'count', field: 'id' },
+        avg_price: { function: 'avg', field: 'price' },
+      },
+      fields: ['categoryId', 'category.name'],
+    },
+  },
+]);
+// Returns: [{ name: 'total_products', collection: 'products', data: [...] }, ...]
+```
+
+### Aggregation Query
+
+Run aggregation queries directly on a collection (uses items endpoint):
+
+```typescript
+const results = await baasix.reports.aggregate('orders', {
+  aggregate: {
+    total: { function: 'sum', field: 'amount' },
+    count: { function: 'count', field: 'id' },
+    min: { function: 'min', field: 'amount' },
+    max: { function: 'max', field: 'amount' },
+    avg: { function: 'avg', field: 'amount' },
+  },
+  groupBy: ['status', 'paymentMethod'],
+  filter: { createdAt: { gte: '$NOW-DAYS_30' } },
+});
+```
+
+### Quick Count
+
+```typescript
 const activeUsers = await baasix.reports.count('users', {
   status: { eq: 'active' },
 });
+```
+
+### Distinct Values
+
+```typescript
+const categories = await baasix.reports.distinct('products', 'category');
+// Returns: ['Electronics', 'Clothing', 'Books', ...]
 ```
 
 ## Workflows
