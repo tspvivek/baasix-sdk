@@ -1,6 +1,6 @@
 {
   "name": "@tspvivek/baasix-sdk",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "description": "Official JavaScript/TypeScript SDK for Baasix Backend-as-a-Service",
   "type": "module",
   "main": "./dist/index.cjs",

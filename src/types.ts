@@ -446,6 +446,7 @@ export type FieldType =
   | "Integer"
   | "BigInt"
   | "Float"
+  | "Real"
   | "Double"
   | "Decimal"
   | "Boolean"
@@ -453,6 +454,7 @@ export type FieldType =
   | "DateTime"
   | "Time"
   | "UUID"
+  | "SUID"
   | "JSON"
   | "JSONB"
   | "Array"
@@ -462,12 +464,41 @@ export type FieldType =
   | "Polygon"
   | "Enum";
 
+/**
+ * Default value types supported by Baasix
+ */
+export type DefaultValueType =
+  | { type: "UUIDV4" }
+  | { type: "SUID" }
+  | { type: "NOW" }
+  | { type: "AUTOINCREMENT" }
+  | { type: "SQL"; value: string }
+  | { type: "CURRENT_USER" }
+  | { type: "CURRENT_TENANT" };
+
 export interface FieldDefinition {
   type: FieldType;
   primaryKey?: boolean;
   allowNull?: boolean;
   unique?: boolean;
-  defaultValue?: unknown;
+  /**
+   * Default value for the field
+   * Can be a static value or a dynamic type
+   * @example
+   * // Static values
+   * defaultValue: "active"
+   * defaultValue: 0
+   * defaultValue: false
+   * defaultValue: []
+   * 
+   * // Dynamic types
+   * defaultValue: { type: "UUIDV4" }
+   * defaultValue: { type: "SUID" }
+   * defaultValue: { type: "NOW" }
+   * defaultValue: { type: "AUTOINCREMENT" }
+   * defaultValue: { type: "SQL", value: "CURRENT_DATE" }
+   */
+  defaultValue?: DefaultValueType | string | number | boolean | null | unknown[] | Record<string, unknown>;
   values?: {
     length?: number;
     precision?: number;
@@ -476,11 +507,25 @@ export interface FieldDefinition {
     values?: string[]; // For Enum
   };
   validate?: {
+    /** Minimum value for numeric fields */
     min?: number;
+    /** Maximum value for numeric fields */
     max?: number;
-    len?: [number, number];
+    /** Validate as integer */
+    isInt?: boolean;
+    /** String must not be empty */
+    notEmpty?: boolean;
+    /** Validate email format */
     isEmail?: boolean;
+    /** Validate URL format */
     isUrl?: boolean;
+    /** String length range [min, max] */
+    len?: [number, number];
+    /** Pattern matching with regex (alias: matches) */
+    is?: string;
+    /** Pattern matching with regex (alias: is) */
+    matches?: string;
+    /** @deprecated Use 'is' or 'matches' instead */
     regex?: string;
   };
   comment?: string;

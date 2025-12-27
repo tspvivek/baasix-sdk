@@ -451,15 +451,54 @@ await baasix.schemas.create({
         primaryKey: true,
         defaultValue: { type: 'UUIDV4' },
       },
+      sku: {
+        type: 'SUID',
+        unique: true,
+        defaultValue: { type: 'SUID' },
+      },
       name: {
         type: 'String',
         allowNull: false,
         values: { length: 255 },
+        validate: {
+          notEmpty: true,
+          len: [3, 255],
+        },
       },
       price: {
         type: 'Decimal',
         values: { precision: 10, scale: 2 },
         defaultValue: 0,
+        validate: {
+          min: 0,
+          max: 999999.99,
+        },
+      },
+      quantity: {
+        type: 'Integer',
+        defaultValue: 0,
+        validate: {
+          isInt: true,
+          min: 0,
+        },
+      },
+      email: {
+        type: 'String',
+        validate: {
+          isEmail: true,
+        },
+      },
+      website: {
+        type: 'String',
+        validate: {
+          isUrl: true,
+        },
+      },
+      slug: {
+        type: 'String',
+        validate: {
+          matches: '^[a-z0-9-]+$',
+        },
       },
       tags: {
         type: 'Array',
@@ -470,10 +509,50 @@ await baasix.schemas.create({
         type: 'JSONB',
         defaultValue: {},
       },
+      status: {
+        type: 'String',
+        defaultValue: 'draft',
+      },
+      isActive: {
+        type: 'Boolean',
+        defaultValue: true,
+      },
+      sortOrder: {
+        type: 'Integer',
+        defaultValue: { type: 'AUTOINCREMENT' },
+      },
+      publishedAt: {
+        type: 'DateTime',
+        defaultValue: { type: 'NOW' },
+      },
     },
   },
 });
 ```
+
+### Validation Rules
+
+| Rule | Type | Description |
+|------|------|-------------|
+| `min` | number | Minimum value for numeric fields |
+| `max` | number | Maximum value for numeric fields |
+| `isInt` | boolean | Validate as integer |
+| `notEmpty` | boolean | String must not be empty |
+| `isEmail` | boolean | Validate email format |
+| `isUrl` | boolean | Validate URL format |
+| `len` | [min, max] | String length range |
+| `is` / `matches` | string | Pattern matching with regex |
+
+### Default Value Types
+
+| Type | Description |
+|------|-------------|
+| `UUIDV4` | Random UUID v4 |
+| `SUID` | Short unique ID (compact, URL-safe) |
+| `NOW` | Current timestamp |
+| `AUTOINCREMENT` | Auto-incrementing integer |
+| `SQL` | Custom SQL expression |
+| Static | Any constant value (`"active"`, `false`, `0`) |
 
 ### Relationships
 
