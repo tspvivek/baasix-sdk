@@ -443,6 +443,7 @@ export interface BulkResponse<T = string[]> {
 export type FieldType =
   | "String"
   | "Text"
+  | "HTML"
   | "Integer"
   | "BigInt"
   | "Float"
