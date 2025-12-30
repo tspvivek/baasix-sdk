@@ -544,6 +544,8 @@ export interface IndexDefinition {
   name: string;
   fields: string[];
   unique?: boolean;
+  /** When true, NULL values are considered equal for unique indexes (PostgreSQL 15+) */
+  nullsNotDistinct?: boolean;
 }
 
 export type RelationshipType = "M2O" | "O2M" | "M2M" | "M2A" | "O2O";
