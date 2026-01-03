@@ -878,6 +878,25 @@ const roleId = await baasix.roles.create({
 await baasix.roles.update(roleId, { description: 'Updated description' });
 ```
 
+## Bulk Operations
+
+```typescript
+// Bulk create
+const ids = await baasix.items('products').createMany([
+  { name: 'Product 1', price: 29.99 },
+  { name: 'Product 2', price: 39.99 },
+]);
+
+// Bulk update - apply same data to multiple items
+await baasix.items('products').updateMany(
+  ['uuid-1', 'uuid-2', 'uuid-3'],
+  { status: 'archived' }
+);
+
+// Bulk delete
+await baasix.items('products').deleteMany(['uuid-1', 'uuid-2']);
+```
+
 ## CSV/JSON Import
 
 ```typescript
@@ -887,12 +906,6 @@ console.log(`Imported: ${result.imported}, Failed: ${result.failed}`);
 
 // Import from JSON file
 const result = await baasix.items('products').importJSON(jsonFile);
-
-// Bulk create from data array
-const ids = await baasix.items('products').createMany([
-  { name: 'Product 1', price: 29.99 },
-  { name: 'Product 2', price: 39.99 },
-]);
 ```
 
 ## Sort / Reorder Items

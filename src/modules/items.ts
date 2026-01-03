@@ -493,14 +493,16 @@ export class ItemsModule<T extends BaseItem = BaseItem> {
    *
    * @example
    * ```typescript
-   * // Update by IDs
+   * // Update by IDs with same data
    * await items.updateMany(['id1', 'id2'], { status: 'archived' });
    * ```
    */
   async updateMany(ids: string[], data: Partial<T>): Promise<string[]> {
+    // Transform to array format expected by API: [{id, data}, {id, data}, ...]
+    const updates = ids.map(id => ({ id, data }));
     const response = await this.client.patch<BulkResponse<string[]>>(
       `/items/${this.collection}/bulk`,
-      { ids, data }
+      updates
     );
     return response.data;
   }
@@ -550,7 +552,7 @@ export class ItemsModule<T extends BaseItem = BaseItem> {
    */
   async deleteMany(ids: string[]): Promise<void> {
     await this.client.delete<DeleteResponse>(`/items/${this.collection}/bulk`, {
-      params: { ids },
+      body: JSON.stringify(ids),
     });
   }
 
