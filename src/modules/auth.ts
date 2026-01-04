@@ -371,9 +371,8 @@ export class AuthModule {
    * ```
    */
   async verifyMagicLink(token: string): Promise<AuthResponse> {
-    const response = await this.client.post<AuthResponse>(
-      "/auth/magiclink/verify",
-      { token },
+    const response = await this.client.get<AuthResponse>(
+      `/auth/magiclink/${encodeURIComponent(token)}`,
       { skipAuth: true }
     );
 
