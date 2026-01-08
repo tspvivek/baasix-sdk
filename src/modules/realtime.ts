@@ -55,6 +55,24 @@ export interface WorkflowExecutionUpdate {
   timestamp: string;
 }
 
+export interface RoomMessage {
+  room: string;
+  event: string;
+  payload: any;
+  sender: {
+    userId: string | number;
+    socketId: string;
+  };
+  timestamp: string;
+}
+
+export interface RoomUserEvent {
+  room: string;
+  userId: string | number;
+  socketId: string;
+  timestamp: string;
+}
+
 export interface SubscriptionCallback<T = any> {
   (payload: SubscriptionPayload<T>): void;
 }
@@ -100,6 +118,8 @@ export class RealtimeModule {
   private socketPath: string;
   private subscriptions: Map<string, Subscription> = new Map();
   private workflowCallbacks: Map<string, Set<(data: WorkflowExecutionUpdate) => void>> = new Map();
+  private roomCallbacks: Map<string, Map<string, Set<(data: RoomMessage) => void>>> = new Map(); // room -> event -> callbacks
+  private roomUserCallbacks: Map<string, { joined: Set<(data: RoomUserEvent) => void>; left: Set<(data: RoomUserEvent) => void> }> = new Map();
   private connectionCallbacks: Set<(connected: boolean) => void> = new Set();
   private reconnecting: boolean = false;
   private connectionPromise: Promise<void> | null = null;
@@ -108,7 +128,7 @@ export class RealtimeModule {
     this.client = config.client;
     this.storage = config.storage;
     this.socketUrl = config.socketUrl || "";
-    this.socketPath = config.socketPath || "/socket";
+    this.socketPath = config.socketPath || "/realtime";
   }
 
   /**
@@ -234,6 +254,29 @@ export class RealtimeModule {
           this.handleWorkflowUpdate({ ...data, status: "complete" });
         });
 
+        // Custom room events
+        this.socket.on("room:user:joined", (data: RoomUserEvent) => {
+          const callbacks = this.roomUserCallbacks.get(data.room);
+          callbacks?.joined.forEach((cb) => {
+            try {
+              cb(data);
+            } catch (e) {
+              console.error("[Baasix Realtime] Error in room user joined callback:", e);
+            }
+          });
+        });
+
+        this.socket.on("room:user:left", (data: RoomUserEvent) => {
+          const callbacks = this.roomUserCallbacks.get(data.room);
+          callbacks?.left.forEach((cb) => {
+            try {
+              cb(data);
+            } catch (e) {
+              console.error("[Baasix Realtime] Error in room user left callback:", e);
+            }
+          });
+        });
+
         this.socket.connect();
       } catch (error) {
         this.connectionPromise = null;
@@ -263,6 +306,8 @@ export class RealtimeModule {
     }
     this.subscriptions.clear();
     this.workflowCallbacks.clear();
+    this.roomCallbacks.clear();
+    this.roomUserCallbacks.clear();
   }
 
   /**
@@ -526,6 +571,247 @@ export class RealtimeModule {
         }
       });
     }
+  }
+
+  // ===================
+  // Custom Rooms API
+  // ===================
+
+  /**
+   * Join a custom room for real-time communication
+   * 
+   * @example
+   * ```typescript
+   * // Join a room
+   * await baasix.realtime.joinRoom('game:lobby');
+   * 
+   * // Listen for messages
+   * baasix.realtime.onRoomMessage('game:lobby', 'chat', (data) => {
+   *   console.log(`${data.sender.userId}: ${data.payload.text}`);
+   * });
+   * ```
+   */
+  async joinRoom(roomName: string): Promise<void> {
+    if (!this.socket?.connected) {
+      throw new Error("Not connected. Call connect() first.");
+    }
+
+    return new Promise((resolve, reject) => {
+      this.socket!.emit("room:join", { room: roomName }, (response: any) => {
+        if (response.status === "success") {
+          this.setupRoomListeners(roomName);
+          resolve();
+        } else {
+          reject(new Error(response.message || "Failed to join room"));
+        }
+      });
+    });
+  }
+
+  /**
+   * Leave a custom room
+   * 
+   * @example
+   * ```typescript
+   * await baasix.realtime.leaveRoom('game:lobby');
+   * ```
+   */
+  async leaveRoom(roomName: string): Promise<void> {
+    if (!this.socket?.connected) {
+      return;
+    }
+
+    return new Promise((resolve, reject) => {
+      this.socket!.emit("room:leave", { room: roomName }, (response: any) => {
+        if (response.status === "success") {
+          this.cleanupRoomListeners(roomName);
+          resolve();
+        } else {
+          reject(new Error(response.message || "Failed to leave room"));
+        }
+      });
+    });
+  }
+
+  /**
+   * Send a message to a room
+   * 
+   * @example
+   * ```typescript
+   * // Send a chat message
+   * await baasix.realtime.sendToRoom('game:lobby', 'chat', { text: 'Hello!' });
+   * 
+   * // Send a game event
+   * await baasix.realtime.sendToRoom('game:123', 'move', { x: 10, y: 20 });
+   * ```
+   */
+  async sendToRoom(roomName: string, event: string, payload: any): Promise<void> {
+    if (!this.socket?.connected) {
+      throw new Error("Not connected. Call connect() first.");
+    }
+
+    return new Promise((resolve, reject) => {
+      this.socket!.emit(
+        "room:message",
+        { room: roomName, event, payload },
+        (response: any) => {
+          if (response.status === "success") {
+            resolve();
+          } else {
+            reject(new Error(response.message || "Failed to send message"));
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Listen for messages in a room with a specific event type
+   * 
+   * @example
+   * ```typescript
+   * const unsubscribe = baasix.realtime.onRoomMessage('game:lobby', 'chat', (data) => {
+   *   console.log(`${data.sender.userId}: ${data.payload.text}`);
+   * });
+   * 
+   * // Later
+   * unsubscribe();
+   * ```
+   */
+  onRoomMessage(
+    roomName: string,
+    event: string,
+    callback: (data: RoomMessage) => void
+  ): () => void {
+    // Get or create room callbacks map
+    if (!this.roomCallbacks.has(roomName)) {
+      this.roomCallbacks.set(roomName, new Map());
+    }
+    const roomEvents = this.roomCallbacks.get(roomName)!;
+
+    // Get or create event callbacks set
+    if (!roomEvents.has(event)) {
+      roomEvents.set(event, new Set());
+    }
+    roomEvents.get(event)!.add(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const events = this.roomCallbacks.get(roomName);
+      if (events) {
+        const callbacks = events.get(event);
+        if (callbacks) {
+          callbacks.delete(callback);
+          if (callbacks.size === 0) {
+            events.delete(event);
+          }
+        }
+        if (events.size === 0) {
+          this.roomCallbacks.delete(roomName);
+        }
+      }
+    };
+  }
+
+  /**
+   * Listen for users joining a room
+   * 
+   * @example
+   * ```typescript
+   * const unsubscribe = baasix.realtime.onRoomUserJoined('game:lobby', (data) => {
+   *   console.log(`User ${data.userId} joined the room`);
+   * });
+   * ```
+   */
+  onRoomUserJoined(
+    roomName: string,
+    callback: (data: RoomUserEvent) => void
+  ): () => void {
+    if (!this.roomUserCallbacks.has(roomName)) {
+      this.roomUserCallbacks.set(roomName, { joined: new Set(), left: new Set() });
+    }
+    this.roomUserCallbacks.get(roomName)!.joined.add(callback);
+
+    return () => {
+      const callbacks = this.roomUserCallbacks.get(roomName);
+      if (callbacks) {
+        callbacks.joined.delete(callback);
+        if (callbacks.joined.size === 0 && callbacks.left.size === 0) {
+          this.roomUserCallbacks.delete(roomName);
+        }
+      }
+    };
+  }
+
+  /**
+   * Listen for users leaving a room
+   * 
+   * @example
+   * ```typescript
+   * const unsubscribe = baasix.realtime.onRoomUserLeft('game:lobby', (data) => {
+   *   console.log(`User ${data.userId} left the room`);
+   * });
+   * ```
+   */
+  onRoomUserLeft(
+    roomName: string,
+    callback: (data: RoomUserEvent) => void
+  ): () => void {
+    if (!this.roomUserCallbacks.has(roomName)) {
+      this.roomUserCallbacks.set(roomName, { joined: new Set(), left: new Set() });
+    }
+    this.roomUserCallbacks.get(roomName)!.left.add(callback);
+
+    return () => {
+      const callbacks = this.roomUserCallbacks.get(roomName);
+      if (callbacks) {
+        callbacks.left.delete(callback);
+        if (callbacks.joined.size === 0 && callbacks.left.size === 0) {
+          this.roomUserCallbacks.delete(roomName);
+        }
+      }
+    };
+  }
+
+  /**
+   * Invoke a custom server-side handler
+   * 
+   * @example
+   * ```typescript
+   * const result = await baasix.realtime.invoke('game:roll-dice', { sides: 6 });
+   * console.log('Dice result:', result);
+   * ```
+   */
+  async invoke<T = any>(event: string, payload: any): Promise<T> {
+    if (!this.socket?.connected) {
+      throw new Error("Not connected. Call connect() first.");
+    }
+
+    return new Promise((resolve, reject) => {
+      this.socket!.emit("custom", { event, payload }, (response: any) => {
+        if (response.status === "success") {
+          resolve(response as T);
+        } else {
+          reject(new Error(response.message || "Custom event failed"));
+        }
+      });
+    });
+  }
+
+  private setupRoomListeners(roomName: string): void {
+    // Room listeners are set up globally in connect()
+    // This method now just ensures the callback maps exist
+    if (!this.roomCallbacks.has(roomName)) {
+      this.roomCallbacks.set(roomName, new Map());
+    }
+    if (!this.roomUserCallbacks.has(roomName)) {
+      this.roomUserCallbacks.set(roomName, { joined: new Set(), left: new Set() });
+    }
+  }
+
+  private cleanupRoomListeners(roomName: string): void {
+    this.roomCallbacks.delete(roomName);
+    this.roomUserCallbacks.delete(roomName);
   }
 
   // ===================
