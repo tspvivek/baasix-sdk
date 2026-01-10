@@ -558,6 +558,7 @@ await baasix.schemas.create({
 
 ```typescript
 // Many-to-One (BelongsTo)
+// Auto-creates index on foreign key column
 await baasix.schemas.createRelationship('products', {
   type: 'M2O',
   target: 'categories',
@@ -566,13 +567,39 @@ await baasix.schemas.createRelationship('products', {
 });
 
 // Many-to-Many
+// Auto-generates junction table: products_tags_tags_junction
 await baasix.schemas.createRelationship('products', {
   type: 'M2M',
   target: 'tags',
   name: 'tags',
   alias: 'products',
 });
+
+// Many-to-Many with custom junction table name
+// Useful when auto-generated name exceeds PostgreSQL's 63 char limit
+await baasix.schemas.createRelationship('products', {
+  type: 'M2M',
+  target: 'tags',
+  name: 'tags',
+  alias: 'products',
+  through: 'product_tags', // Custom junction table name (max 63 chars)
+});
+
+// Many-to-Any (Polymorphic)
+await baasix.schemas.createRelationship('comments', {
+  type: 'M2A',
+  name: 'commentable',
+  tables: ['posts', 'products'],
+  alias: 'comments',
+  through: 'comment_refs', // Optional custom junction table name
+});
 ```
+
+#### Junction Tables (M2M/M2A)
+- **Auto-generated name**: `{source}_{target}_{name}_junction`
+- **Custom name**: Use `through` property (max 63 characters for PostgreSQL)
+- **Schema property**: Junction tables have `isJunction: true` in their schema
+- **Auto-indexed**: Foreign key columns are automatically indexed
 
 ### Indexes
 

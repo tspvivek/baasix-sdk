@@ -536,6 +536,11 @@ export interface SchemaDefinition {
   name: string;
   timestamps?: boolean;
   paranoid?: boolean;
+  /** 
+   * True for M2M/M2A junction tables (system-generated)
+   * Junction tables are auto-created when defining M2M or M2A relationships
+   */
+  isJunction?: boolean;
   fields: Record<string, FieldDefinition>;
   indexes?: IndexDefinition[];
 }
@@ -555,9 +560,16 @@ export interface RelationshipDefinition {
   target: string;
   name: string;
   alias?: string;
+  /** 
+   * Custom junction table name for M2M/M2A relationships (max 63 chars for PostgreSQL)
+   * If not provided, auto-generated as: {source}_{target}_{name}_junction
+   * @example "product_tags" or "comment_refs"
+   */
+  through?: string;
   onDelete?: "CASCADE" | "RESTRICT" | "SET NULL";
   onUpdate?: "CASCADE" | "RESTRICT" | "SET NULL";
-  tables?: string[]; // For M2A
+  /** Target tables for M2A (polymorphic) relationships */
+  tables?: string[];
 }
 
 export interface SchemaInfo {
