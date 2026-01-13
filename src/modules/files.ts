@@ -95,7 +95,10 @@ export class FilesModule {
     const response = await this.client.upload<{ data: FileMetadata }>(
       "/files",
       formData,
-      { onProgress: options?.onProgress }
+      { 
+        onProgress: options?.onProgress,
+        timeout: options?.timeout 
+      }
     );
 
     return response.data;

@@ -609,6 +609,8 @@ export interface UploadOptions {
   isPublic?: boolean;
   metadata?: Record<string, unknown>;
   onProgress?: (progress: number) => void;
+  /** Request timeout in milliseconds (default: 30000). Set to 0 for no timeout. */
+  timeout?: number;
 }
 
 export interface AssetTransformOptions {

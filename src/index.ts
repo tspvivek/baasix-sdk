@@ -109,7 +109,7 @@ export class Baasix {
       ...config,
       url: normalizedUrl,
       authMode: config.authMode || "jwt",
-      timeout: config.timeout || 30000,
+      timeout: config.timeout || 600000, // 10 minutes default
       autoRefresh: config.autoRefresh !== false,
     };
 
