@@ -1,4 +1,20 @@
-# @tspvivek/baasix-sdk
+# ⚠️ THIS REPOSITORY HAS MOVED ⚠️
+
+> **This repository is no longer maintained. The project has been moved to a monorepo.**
+>
+> ### 👉 [New Repository: github.com/baasix/baasix](https://github.com/baasix/baasix)
+>
+> **New package name: `@baasix/sdk`**
+>
+> The SDK is now part of the Baasix monorepo at `packages/sdk`.
+>
+> ```bash
+> npm install @baasix/sdk
+> ```
+
+---
+
+# @baasix/sdk
 
 Official JavaScript/TypeScript SDK for [Baasix](https://www.baasix.com) Backend-as-a-Service.
 
